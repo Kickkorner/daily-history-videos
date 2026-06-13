@@ -36,15 +36,14 @@ jobs:
         run: python upload_youtube.py
 
       - name: Publish video to GitHub Release (for public URL)
-        id: release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          TAG="video-$(date +%Y%m%d-%H%M%S)"
-          FILE=$(ls output/*.mp4)
-          gh release create "$TAG" "$FILE" --title "$TAG" --notes "Daily video"
-          URL=$(gh release view "$TAG" --json assets -q '.assets[0].browser_download_url')
-          echo "video_url=$URL" >> "$GITHUB_OUTPUT"
+           id: release
+           env:
+             GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+           run: |
+             TAG="video-$(date +%Y%m%d-%H%M%S)"
+             gh release create "$TAG" output/*.mp4 --title "$TAG" --notes "Daily videos"
+             URL=$(gh release view "$TAG" --json assets -q '.assets[0].browser_download_url')
+             echo "video_url=$URL" >> "$GITHUB_OUTPUT"
 
       - name: Upload to Instagram
         env:
