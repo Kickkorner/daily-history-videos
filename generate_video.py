@@ -175,8 +175,10 @@ def main():
     srt_path = WORK_DIR / "captions.srt"
     build_srt(lines, duration, srt_path)
 
-    today = datetime.now().strftime("%Y%m%d")
-    final_path = OUTPUT_DIR / f"video_{today}.mp4"
+    import uuid
+   today = datetime.now().strftime("%Y%m%d")
+   uid = uuid.uuid4().hex[:6]
+   final_path = OUTPUT_DIR / f"video_{today}_{uid}.mp4"
 
     subtitle_style = (
         "FontName=Arial,FontSize=14,PrimaryColour=&H00FFFFFF,"
