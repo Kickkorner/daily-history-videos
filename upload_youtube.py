@@ -61,11 +61,11 @@ if __name__ == "__main__":
         authenticate()
         sys.exit(0)
 
-    meta_files = sorted(glob.glob("output/meta_*.json"))
-   if not meta_files:
+meta_files = sorted(glob.glob("output/meta_*.json"))
+if not meta_files:
        print("No meta file found")
        sys.exit(1)
-   for mf in meta_files:
+for mf in meta_files:
        meta = json.load(open(mf))
        try:
            upload(meta["file"], meta["title"], meta["description"])
