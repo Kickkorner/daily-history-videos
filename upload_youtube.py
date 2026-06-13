@@ -41,8 +41,8 @@ def upload(video_path, title, description):
         "snippet": {
             "title": title[:100],
             "description": description,
-            "tags": ["shorts", "history", "historyfacts", "didyouknow"],
-            "categoryId": "22",
+            "tags": ["shorts", "fifa", "worldcup", "football"],
+            "categoryId": "17",
         },
         "status": {"privacyStatus": "public"},
     }
@@ -61,13 +61,14 @@ if __name__ == "__main__":
         authenticate()
         sys.exit(0)
 
-meta_files = sorted(glob.glob("output/meta_*.json"))
-if not meta_files:
-       print("No meta file found")
-       sys.exit(1)
-for mf in meta_files:
-       meta = json.load(open(mf))
-       try:
-           upload(meta["file"], meta["title"], meta["description"])
-       except Exception as e:
-           print(f"Upload failed for {mf}: {e}")
+    meta_files = sorted(glob.glob("output/meta_*.json"))
+    if not meta_files:
+        print("No meta file found")
+        sys.exit(1)
+
+    for mf in meta_files:
+        meta = json.load(open(mf))
+        try:
+            upload(meta["file"], meta["title"], meta["description"])
+        except Exception as e:
+            print(f"Upload failed for {mf}: {e}")
