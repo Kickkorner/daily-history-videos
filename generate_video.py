@@ -4,6 +4,7 @@ Daily Animated Video Generator (100% free-tier tools)
 
 import os
 import json
+import time
 import asyncio
 import subprocess
 from datetime import datetime
@@ -12,6 +13,7 @@ from pathlib import Path
 import requests
 import edge_tts
 from google import genai
+from google.genai import errors as genai_errors
 
 GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
 PEXELS_API_KEY = os.environ["PEXELS_API_KEY"]
@@ -23,6 +25,29 @@ OUTPUT_DIR.mkdir(exist_ok=True)
 WORK_DIR.mkdir(exist_ok=True)
 
 client = genai.Client(api_key=GEMINI_API_KEY)
+
+
+# Ordered from most-preferred to least-preferred. Update this list whenever
+# Google announces a new deprecation (check ai.google.dev/gemini-api/docs/changelog).
+MODEL_FALLBACK_CHAIN = [
+    "gemini-2.5-flash",
+    "gemini-2.5-flash-lite",
+    "gemini-3-flash-lite",
+]
+
+
+def _extract_retry_delay(error):
+    """Pull Google's suggested retryDelay (e.g. '38s') out of the error body, if present."""
+    try:
+        details = error.details or {}
+        for d in details.get("error", {}).get("details", []):
+            if d.get("@type", "").endswith("RetryInfo"):
+                delay_str = d.get("retryDelay", "")
+                if delay_str.endswith("s"):
+                    return float(delay_str[:-1])
+    except Exception:
+        pass
+    return None
 
 
 def generate_script():
@@ -46,13 +71,48 @@ Return STRICT JSON only, no markdown, in this exact format:
 The "lines" should be the script split into 5-8 short caption chunks
 (max ~8 words each) in the order they're spoken.
 """
-    resp = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
-    text = resp.text.strip()
-    if text.startswith("```"):
-        text = text.split("```")[1]
-        if text.startswith("json"):
-            text = text[4:]
-    return json.loads(text)
+    last_error = None
+
+    for model_name in MODEL_FALLBACK_CHAIN:
+        for attempt in range(1, 3):
+            try:
+                print(f"Generating script via Gemini using model: {model_name} (attempt {attempt})")
+                resp = client.models.generate_content(model=model_name, contents=prompt)
+                text = resp.text.strip()
+                if text.startswith("```"):
+                    text = text.split("```")[1]
+                    if text.startswith("json"):
+                        text = text[4:]
+                print(f"Success with model: {model_name}")
+                return json.loads(text)
+
+            except genai_errors.ClientError as e:
+                last_error = e
+                status = getattr(e, "status_code", None)
+
+                if status == 404:
+                    print(f"Model {model_name} not found (likely retired). Trying next model.")
+                    break
+
+                if status == 429:
+                    retry_delay = _extract_retry_delay(e) or (5 * attempt)
+                    if attempt < 2:
+                        print(f"Model {model_name} rate-limited. Retrying in {retry_delay:.0f}s...")
+                        time.sleep(retry_delay)
+                        continue
+                    else:
+                        print(f"Model {model_name} still rate-limited after retry. Trying next model.")
+                        break
+
+                print(f"Model {model_name} failed with unexpected error: {e}. Trying next model.")
+                break
+
+            except Exception as e:
+                last_error = e
+                print(f"Unexpected error with model {model_name}: {e}. Trying next model.")
+                break
+
+    raise RuntimeError(f"All models in fallback chain {MODEL_FALLBACK_CHAIN} failed. Last error: {last_error}")
 
 
 async def generate_voiceover(script_text, out_path):
@@ -181,15 +241,15 @@ def main():
     final_path = OUTPUT_DIR / f"video_{today}_{uid}.mp4"
 
     cmd = [
-       "ffmpeg", "-y",
-       "-i", str(silent_video),
-       "-i", str(audio_path),
-       "-c:v", "libx264", "-c:a", "aac",
-       "-map", "0:v:0", "-map", "1:a:0",
-       "-shortest",
-       str(final_path)
-   ]
-   subprocess.run(cmd, check=True)
+        "ffmpeg", "-y",
+        "-i", str(silent_video),
+        "-i", str(audio_path),
+        "-c:v", "libx264", "-c:a", "aac",
+        "-map", "0:v:0", "-map", "1:a:0",
+        "-shortest",
+        str(final_path)
+    ]
+    subprocess.run(cmd, check=True)
     meta = {
         "title": title,
         "description": script_text + "\n\n#shorts #history #historyfacts #didyouknow",
